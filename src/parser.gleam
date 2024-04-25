@@ -17,8 +17,9 @@ pub type Operand {
 }
 
 pub type Tree {
-  Node(operand: Operand, left: Tree, right: Tree)
-  Leaf(Float)
+  Operation(operand: Operand, left: Tree, right: Tree)
+  Number(Float)
+  Group(Tree)
 }
 
 /// it should return Result(Tree, Int)
@@ -53,28 +54,6 @@ fn term(tokens: Iterator(Token)) {
   repeat(tree, tokens, [Asterisk, Slash], unary)
 }
 
-fn repeat(
-  tree: Tree,
-  tokens: Iterator(Token),
-  ops: List(Token),
-  func: fn(Iterator(Token)) -> Result(#(Tree, Iterator(Token)), Token),
-) {
-  case iterator.step(tokens) {
-    Next(token, next_tokens) ->
-      case list.any(ops, fn(op) { op == token }) {
-        True -> {
-          use #(new_tree, tokens) <- result.try(func(next_tokens))
-          let assert Ok(op) = op_from_token(token)
-
-          Node(op, tree, new_tree)
-          |> repeat(tokens, ops, func)
-        }
-        False -> Ok(#(tree, tokens))
-      }
-    Done -> Ok(#(tree, tokens))
-  }
-}
-
 /// unary ::= ["+" | "-"] number
 fn unary(tokens: Iterator(Token)) {
   use _ <- result.try_recover(powered(tokens))
@@ -83,7 +62,7 @@ fn unary(tokens: Iterator(Token)) {
     Next(Minus, tokens) -> {
       use #(tree, tokens) <- result.try(powered(tokens))
 
-      Ok(#(Node(Sub, Leaf(0.0), tree), tokens))
+      Ok(#(Operation(Sub, Number(0.0), tree), tokens))
     }
     Next(token, _) -> Error(token)
     Done -> Error(TInvalid)
@@ -93,8 +72,15 @@ fn unary(tokens: Iterator(Token)) {
 /// powered ::= number { "^" number }
 fn powered(tokens: Iterator(Token)) {
   use #(tree, tokens) <- result.try(number(tokens))
+  use #(tree, tokens) <- result.try(repeat(tree, tokens, [Caret], number))
 
-  repeat(tree, tokens, [Caret], number)
+  case tree {
+    // for power the right most term has higher precedence
+    Operation(Pow, left, right) -> {
+      Ok(#(reverse_tree(left, right), tokens))
+    }
+    _ -> Ok(#(tree, tokens))
+  }
 }
 
 /// number ::= int | float | "(" expression ")"
@@ -102,15 +88,15 @@ fn number(tokens: Iterator(Token)) {
   case iterator.step(tokens) {
     Next(TInteger(int), tokens) -> {
       let float = int.to_float(int)
-      Ok(#(Leaf(float), tokens))
+      Ok(#(Number(float), tokens))
     }
     Next(TFloat(float), tokens) -> {
-      Ok(#(Leaf(float), tokens))
+      Ok(#(Number(float), tokens))
     }
     Next(LParen, tokens) -> {
       use #(tree, tokens) <- result.try(expression(tokens))
       case iterator.step(tokens) {
-        Next(RParen, tokens) -> Ok(#(tree, tokens))
+        Next(RParen, tokens) -> Ok(#(Group(tree), tokens))
         Next(token, _) -> Error(token)
         Done -> Error(TInvalid)
       }
@@ -128,5 +114,37 @@ fn op_from_token(token: Token) {
     Caret -> Ok(Pow)
 
     _ -> Error(Nil)
+  }
+}
+
+fn reverse_tree(tree: Tree, new_tree: Tree) -> Tree {
+  case tree {
+    Operation(op, left, right) -> {
+      Operation(op, right, new_tree)
+      |> reverse_tree(left, _)
+    }
+    _ -> Operation(Pow, tree, new_tree)
+  }
+}
+
+fn repeat(
+  tree: Tree,
+  tokens: Iterator(Token),
+  ops: List(Token),
+  func: fn(Iterator(Token)) -> Result(#(Tree, Iterator(Token)), Token),
+) {
+  case iterator.step(tokens) {
+    Next(token, next_tokens) ->
+      case list.any(ops, fn(op) { op == token }) {
+        True -> {
+          use #(new_tree, tokens) <- result.try(func(next_tokens))
+          let assert Ok(op) = op_from_token(token)
+
+          Operation(op, tree, new_tree)
+          |> repeat(tokens, ops, func)
+        }
+        False -> Ok(#(tree, tokens))
+      }
+    Done -> Ok(#(tree, tokens))
   }
 }

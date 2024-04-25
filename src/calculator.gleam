@@ -1,9 +1,10 @@
+import gleam/bool.{guard}
 import gleam/erlang
 import gleam/float
 import gleam/io
 import gleam/result
 import lexer
-import parser.{type Tree, Add, Div, Leaf, Mul, Node, Pow, Sub}
+import parser.{type Tree, Add, Div, Group, Mul, Number, Operation, Pow, Sub}
 
 type CalculationError {
   DivisionByZero
@@ -11,37 +12,49 @@ type CalculationError {
 }
 
 pub fn main() {
+  loop()
+}
+
+fn loop() {
   let assert Ok(source) = erlang.get_line("> ")
 
-  case
-    lexer.lex(source)
-    |> parser.parse
+  // io.debug(source)
   {
-    Ok(tree) ->
-      case evaluate(tree) {
-        Ok(ans) -> {
-          ans
-          |> io.debug
+    use <- guard(source == "\n", Nil)
 
-          Nil
-        }
-        Error(err) -> {
-          err
-          |> io.debug
+    let tree =
+      lexer.lex(source)
+      |> parser.parse
 
-          Nil
+    case tree {
+      Ok(tree) -> {
+        // io.debug(tree)
+
+        case evaluate(tree) {
+          Ok(ans) -> {
+            ans
+            |> io.debug
+
+            Nil
+          }
+          Error(err) -> {
+            err
+            |> io.debug
+
+            Nil
+          }
         }
       }
-    Error(Nil) -> io.println_error("Invalid token")
+      Error(Nil) -> io.println_error("Invalid token")
+    }
   }
-
-  main()
+  loop()
 }
 
 fn evaluate(tree: Tree) {
   case tree {
-    Leaf(n) -> Ok(n)
-    Node(op, left, right) -> {
+    Number(n) -> Ok(n)
+    Operation(op, left, right) -> {
       use left <- result.try(evaluate(left))
       use right <- result.try(evaluate(right))
 
@@ -57,5 +70,6 @@ fn evaluate(tree: Tree) {
           |> result.replace_error(ComplexNumber)
       }
     }
+    Group(tree) -> evaluate(tree)
   }
 }
