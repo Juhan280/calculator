@@ -1,5 +1,9 @@
 # Calculator
 
+## Unreleased
+- added color for answering corrrctly
+- added error formatting
+
 ## v1.1.0
 - added support for power (^)
 

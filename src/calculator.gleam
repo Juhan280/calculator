@@ -3,6 +3,7 @@ import gleam/erlang
 import gleam/float
 import gleam/io
 import gleam/result
+import gleam/string
 import lexer
 import parser.{type Tree, Add, Div, Group, Mul, Number, Operation, Pow, Sub}
 
@@ -31,12 +32,8 @@ fn loop() {
         // io.debug(tree)
 
         case evaluate(tree) {
-          Ok(ans) -> {
-            ans
-            |> io.debug
+          Ok(ans) -> print_ans(ans)
 
-            Nil
-          }
           Error(err) -> {
             err
             |> io.debug
@@ -45,7 +42,10 @@ fn loop() {
           }
         }
       }
-      Error(Nil) -> io.println_error("Invalid token")
+      Error(token) -> {
+        let padding = string.repeat(" ", lexer.token_index(token) + 2)
+        io.println_error(padding <> "^\n" <> padding <> "Invalid Token")
+      }
     }
   }
   loop()
@@ -72,4 +72,8 @@ fn evaluate(tree: Tree) {
     }
     Group(tree) -> evaluate(tree)
   }
+}
+
+fn print_ans(num: Float) {
+  io.println("\u{1b}[38;5;138m" <> float.to_string(num) <> "\u{1b}[0m")
 }

@@ -1,11 +1,10 @@
 import gleam/int
-import gleam/io
 import gleam/iterator.{type Iterator, Done, Next}
 import gleam/list
 import gleam/result
 import lexer.{
-  type Token, Asterisk, Caret, Float as TFloat, Integer as TInteger,
-  Invalid as TInvalid, LParen, Minus, Plus, RParen, Slash,
+  type Token, Asterisk, Caret, EOE, Float as TFloat, Integer as TInteger, LParen,
+  Minus, Plus, RParen, Slash,
 }
 
 pub type Operand {
@@ -22,21 +21,12 @@ pub type Tree {
   Group(Tree)
 }
 
-/// it should return Result(Tree, Int)
-pub fn parse(tokens: Iterator(Token)) {
-  use #(tree, tokens) <- result.try(
-    expression(tokens)
-    |> result.nil_error,
-  )
+pub fn parse(tokens: Iterator(Token)) -> Result(Tree, Token) {
+  use #(tree, tokens) <- result.try(expression(tokens))
 
   case iterator.first(tokens) {
     Error(Nil) -> Ok(tree)
-    Ok(TInvalid) -> Error(Nil)
-    Ok(t) -> {
-      io.print("found token")
-      io.debug(t)
-      panic as "this might be some edge case i am unware of"
-    }
+    Ok(token) -> Error(token)
   }
 }
 
@@ -44,35 +34,35 @@ pub fn parse(tokens: Iterator(Token)) {
 fn expression(tokens: Iterator(Token)) {
   use #(tree, tokens) <- result.try(term(tokens))
 
-  repeat(tree, tokens, [Plus, Minus], term)
+  repeat(tree, tokens, [Plus(-1), Minus(-1)], term)
 }
 
 /// term ::= unary {( "/" | "*" ) unary}
 fn term(tokens: Iterator(Token)) {
   use #(tree, tokens) <- result.try(unary(tokens))
 
-  repeat(tree, tokens, [Asterisk, Slash], unary)
+  repeat(tree, tokens, [Asterisk(-1), Slash(-1)], unary)
 }
 
 /// unary ::= ["+" | "-"] number
 fn unary(tokens: Iterator(Token)) {
   use _ <- result.try_recover(powered(tokens))
   case iterator.step(tokens) {
-    Next(Plus, tokens) -> powered(tokens)
-    Next(Minus, tokens) -> {
+    Next(Plus(_), tokens) -> powered(tokens)
+    Next(Minus(_), tokens) -> {
       use #(tree, tokens) <- result.try(powered(tokens))
 
       Ok(#(Operation(Sub, Number(0.0), tree), tokens))
     }
     Next(token, _) -> Error(token)
-    Done -> Error(TInvalid)
+    Done -> Error(EOE)
   }
 }
 
 /// powered ::= number { "^" number }
 fn powered(tokens: Iterator(Token)) {
   use #(tree, tokens) <- result.try(number(tokens))
-  use #(tree, tokens) <- result.try(repeat(tree, tokens, [Caret], number))
+  use #(tree, tokens) <- result.try(repeat(tree, tokens, [Caret(-1)], number))
 
   case tree {
     // for power the right most term has higher precedence
@@ -86,32 +76,33 @@ fn powered(tokens: Iterator(Token)) {
 /// number ::= int | float | "(" expression ")"
 fn number(tokens: Iterator(Token)) {
   case iterator.step(tokens) {
-    Next(TInteger(int), tokens) -> {
+    Next(TInteger(int, _), tokens) -> {
       let float = int.to_float(int)
       Ok(#(Number(float), tokens))
     }
-    Next(TFloat(float), tokens) -> {
+    Next(TFloat(float, _), tokens) -> {
       Ok(#(Number(float), tokens))
     }
-    Next(LParen, tokens) -> {
+    Next(LParen(_), tokens) -> {
       use #(tree, tokens) <- result.try(expression(tokens))
       case iterator.step(tokens) {
-        Next(RParen, tokens) -> Ok(#(Group(tree), tokens))
+        Next(RParen(_), tokens) -> Ok(#(Group(tree), tokens))
         Next(token, _) -> Error(token)
-        Done -> Error(TInvalid)
+        Done -> Error(EOE)
       }
     }
-    _ -> Error(TInvalid)
+    Next(token, _) -> Error(token)
+    Done -> Error(EOE)
   }
 }
 
 fn op_from_token(token: Token) {
   case token {
-    Plus -> Ok(Add)
-    Minus -> Ok(Sub)
-    Asterisk -> Ok(Mul)
-    Slash -> Ok(Div)
-    Caret -> Ok(Pow)
+    Plus(_) -> Ok(Add)
+    Minus(_) -> Ok(Sub)
+    Asterisk(_) -> Ok(Mul)
+    Slash(_) -> Ok(Div)
+    Caret(_) -> Ok(Pow)
 
     _ -> Error(Nil)
   }
@@ -135,7 +126,19 @@ fn repeat(
 ) {
   case iterator.step(tokens) {
     Next(token, next_tokens) ->
-      case list.any(ops, fn(op) { op == token }) {
+      case
+        list.any(ops, fn(op) {
+          case op, token {
+            Plus(_), Plus(_)
+            | Minus(_), Minus(_)
+            | Asterisk(_), Asterisk(_)
+            | Slash(_), Slash(_)
+            | Caret(_), Caret(_)
+            -> True
+            _, _ -> False
+          }
+        })
+      {
         True -> {
           use #(new_tree, tokens) <- result.try(func(next_tokens))
           let assert Ok(op) = op_from_token(token)
