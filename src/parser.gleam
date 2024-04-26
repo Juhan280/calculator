@@ -1,10 +1,11 @@
+import gleam/float
 import gleam/int
 import gleam/iterator.{type Iterator, Done, Next}
 import gleam/list
 import gleam/result
 import lexer.{
   type Token, Asterisk, Caret, EOE, Float as TFloat, Integer as TInteger, LParen,
-  Minus, Plus, RParen, Slash,
+  Minus, Plus, RParen, Slash, Underscore,
 }
 
 pub type Operand {
@@ -18,7 +19,7 @@ pub type Operand {
 pub type Tree {
   Operation(operand: Operand, left: Tree, right: Tree)
   Number(Float)
-  Group(Tree)
+  LastResult
 }
 
 pub fn parse(tokens: Iterator(Token)) -> Result(Tree, Token) {
@@ -31,26 +32,50 @@ pub fn parse(tokens: Iterator(Token)) -> Result(Tree, Token) {
 }
 
 /// expression ::= term {( "-" | "+" ) term}
+/// expression ::= expression {( "-" | "+" ) term | term
 fn expression(tokens: Iterator(Token)) {
   use #(tree, tokens) <- result.try(term(tokens))
 
   repeat(tree, tokens, [Plus(-1), Minus(-1)], term)
+  // case iterator.step(tokens) {
+  //   Next(Plus(_), tokens) -> {
+  //     use #(new_tree, tokens) <- result.try(term(tokens))
+  //
+  //     Ok(#(Operation(Add, tree, new_tree), tokens))
+  //   }
+  //   _ -> Ok(#(tree, tokens))
+  // }
 }
 
-/// term ::= unary {( "/" | "*" ) unary}
+/// term ::= powered {( "/" | "*" ) powered}
+/// term ::= term ( "/" | "*" ) powered | powered
 fn term(tokens: Iterator(Token)) {
+  use #(tree, tokens) <- result.try(powered(tokens))
+
+  repeat(tree, tokens, [Asterisk(-1), Slash(-1)], powered)
+}
+
+/// powered ::= unary "^" powered | unary 
+fn powered(tokens: Iterator(Token)) {
   use #(tree, tokens) <- result.try(unary(tokens))
 
-  repeat(tree, tokens, [Asterisk(-1), Slash(-1)], unary)
+  case iterator.step(tokens) {
+    Next(Caret(_), tokens) -> {
+      use #(new_tree, tokens) <- result.try(powered(tokens))
+
+      Ok(#(Operation(Pow, tree, new_tree), tokens))
+    }
+    _ -> Ok(#(tree, tokens))
+  }
 }
 
 /// unary ::= ["+" | "-"] number
 fn unary(tokens: Iterator(Token)) {
-  use _ <- result.try_recover(powered(tokens))
+  use _ <- result.try_recover(number(tokens))
   case iterator.step(tokens) {
-    Next(Plus(_), tokens) -> powered(tokens)
+    Next(Plus(_), tokens) -> number(tokens)
     Next(Minus(_), tokens) -> {
-      use #(tree, tokens) <- result.try(powered(tokens))
+      use #(tree, tokens) <- result.try(number(tokens))
 
       Ok(#(Operation(Sub, Number(0.0), tree), tokens))
     }
@@ -59,34 +84,23 @@ fn unary(tokens: Iterator(Token)) {
   }
 }
 
-/// powered ::= number { "^" number }
-fn powered(tokens: Iterator(Token)) {
-  use #(tree, tokens) <- result.try(number(tokens))
-  use #(tree, tokens) <- result.try(repeat(tree, tokens, [Caret(-1)], number))
-
-  case tree {
-    // for power the right most term has higher precedence
-    Operation(Pow, left, right) -> {
-      Ok(#(reverse_tree(left, right), tokens))
-    }
-    _ -> Ok(#(tree, tokens))
-  }
-}
-
-/// number ::= int | float | "(" expression ")"
+/// number ::= int | float | last_result | "(" expression ")"
 fn number(tokens: Iterator(Token)) {
   case iterator.step(tokens) {
     Next(TInteger(int, _), tokens) -> {
+      let assert Ok(int) = int.parse(int)
       let float = int.to_float(int)
       Ok(#(Number(float), tokens))
     }
     Next(TFloat(float, _), tokens) -> {
+      let assert Ok(float) = float.parse(float)
       Ok(#(Number(float), tokens))
     }
+    Next(Underscore(_), tokens) -> Ok(#(LastResult, tokens))
     Next(LParen(_), tokens) -> {
       use #(tree, tokens) <- result.try(expression(tokens))
       case iterator.step(tokens) {
-        Next(RParen(_), tokens) -> Ok(#(Group(tree), tokens))
+        Next(RParen(_), tokens) -> Ok(#(tree, tokens))
         Next(token, _) -> Error(token)
         Done -> Error(EOE)
       }
@@ -108,16 +122,6 @@ fn op_from_token(token: Token) {
   }
 }
 
-fn reverse_tree(tree: Tree, new_tree: Tree) -> Tree {
-  case tree {
-    Operation(op, left, right) -> {
-      Operation(op, right, new_tree)
-      |> reverse_tree(left, _)
-    }
-    _ -> Operation(Pow, tree, new_tree)
-  }
-}
-
 fn repeat(
   tree: Tree,
   tokens: Iterator(Token),
@@ -133,7 +137,6 @@ fn repeat(
             | Minus(_), Minus(_)
             | Asterisk(_), Asterisk(_)
             | Slash(_), Slash(_)
-            | Caret(_), Caret(_)
             -> True
             _, _ -> False
           }

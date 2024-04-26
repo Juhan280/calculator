@@ -1,11 +1,13 @@
 
 
 expression ::= term {( "-" | "+" ) term}
+expression ::= expression {( "-" | "+" ) term | term
 
-term ::= unary {( "/" | "*" ) unary}
+term ::= unary {( "/" | "*" ) powered}
+term ::= term ( "/" | "*" ) powered | powered
 
-unary ::= ["+" | "-"] powered
+powered ::= unary "^" powered | unary 
 
-powered ::= number { "^" number }
+unary ::= ["+" | "-"] number
 
-number ::= int | float | "(" expression ")"
+number ::= int | float | last_result | "(" expression ")"

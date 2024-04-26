@@ -5,7 +5,7 @@ import gleam/io
 import gleam/result
 import gleam/string
 import lexer
-import parser.{type Tree, Add, Div, Group, Mul, Number, Operation, Pow, Sub}
+import parser.{type Tree, Add, Div, LastResult, Mul, Number, Operation, Pow, Sub}
 
 type CalculationError {
   DivisionByZero
@@ -13,15 +13,14 @@ type CalculationError {
 }
 
 pub fn main() {
-  loop()
+  loop(0.0)
 }
 
-fn loop() {
-  let assert Ok(source) = erlang.get_line("> ")
+fn loop(last_result: Float) {
+  use source <- result.then(erlang.get_line("> "))
 
-  // io.debug(source)
-  {
-    use <- guard(source == "\n", Nil)
+  let last_result = {
+    use <- guard(source == "\n", last_result)
 
     let tree =
       lexer.lex(source)
@@ -31,32 +30,34 @@ fn loop() {
       Ok(tree) -> {
         // io.debug(tree)
 
-        case evaluate(tree) {
+        case evaluate(tree, last_result) {
           Ok(ans) -> print_ans(ans)
 
           Error(err) -> {
-            err
-            |> io.debug
+            io.debug(err)
 
-            Nil
+            last_result
           }
         }
       }
       Error(token) -> {
         let padding = string.repeat(" ", lexer.token_index(token) + 2)
         io.println_error(padding <> "^\n" <> padding <> "Invalid Token")
+
+        last_result
       }
     }
   }
-  loop()
+  loop(last_result)
 }
 
-fn evaluate(tree: Tree) {
+fn evaluate(tree: Tree, last_result: Float) {
   case tree {
     Number(n) -> Ok(n)
+    LastResult -> Ok(last_result)
     Operation(op, left, right) -> {
-      use left <- result.try(evaluate(left))
-      use right <- result.try(evaluate(right))
+      use left <- result.try(evaluate(left, last_result))
+      use right <- result.try(evaluate(right, last_result))
 
       case op {
         Add -> Ok(left +. right)
@@ -67,13 +68,18 @@ fn evaluate(tree: Tree) {
           |> result.replace_error(DivisionByZero)
         Pow ->
           float.power(left, right)
-          |> result.replace_error(ComplexNumber)
+          |> result.map_error(fn(_) {
+            case left == 0.0 && right <. 0.0 {
+              True -> DivisionByZero
+              False -> ComplexNumber
+            }
+          })
       }
     }
-    Group(tree) -> evaluate(tree)
   }
 }
 
 fn print_ans(num: Float) {
   io.println("\u{1b}[38;5;138m" <> float.to_string(num) <> "\u{1b}[0m")
+  num
 }

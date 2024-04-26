@@ -1,12 +1,10 @@
-import gleam/float
-import gleam/int
 import gleam/iterator.{type Iterator, Done, Next}
 import gleam/regex
 import gleam/string
 
 pub type Token {
-  Integer(value: Int, index: Int)
-  Float(value: Float, index: Int)
+  Integer(value: String, index: Int)
+  Float(value: String, index: Int)
 
   Plus(index: Int)
   Minus(index: Int)
@@ -14,6 +12,7 @@ pub type Token {
   Slash(index: Int)
   Caret(index: Int)
 
+  Underscore(index: Int)
   LParen(index: Int)
   RParen(index: Int)
 
@@ -22,37 +21,38 @@ pub type Token {
 }
 
 pub fn lex(source: String) -> Iterator(Token) {
-  use #(buffer, index) <- iterator.unfold(#(source, 0))
-  case get_token(buffer, index) {
+  use #(buffer, offset) <- iterator.unfold(#(source, 0))
+  case get_token(buffer, offset) {
     #(EOE, _, _) -> Done
     #(token, rest, index) -> Next(token, #(rest, index))
   }
 }
 
-fn get_token(old_buffer: String, index: Int) -> #(Token, String, Int) {
+fn get_token(old_buffer: String, offset: Int) -> #(Token, String, Int) {
   let buffer = string.trim_left(old_buffer)
-  let index = index + string.length(old_buffer) - string.length(buffer)
+  let index = offset + string.length(old_buffer) - string.length(buffer)
 
-  case string.pop_grapheme(buffer) {
-    Ok(#(ch, rest)) if ch == "+" -> #(Plus(index), rest, index + 1)
-    Ok(#(ch, rest)) if ch == "-" -> #(Minus(index), rest, index + 1)
-    Ok(#(ch, rest)) if ch == "*" -> #(Asterisk(index), rest, index + 1)
-    Ok(#(ch, rest)) if ch == "/" -> #(Slash(index), rest, index + 1)
-    Ok(#(ch, rest)) if ch == "^" -> #(Caret(index), rest, index + 1)
+  case buffer {
+    "+" <> rest -> #(Plus(index), rest, index + 1)
+    "-" <> rest -> #(Minus(index), rest, index + 1)
+    "*" <> rest -> #(Asterisk(index), rest, index + 1)
+    "/" <> rest -> #(Slash(index), rest, index + 1)
+    "^" <> rest -> #(Caret(index), rest, index + 1)
 
-    Ok(#(ch, rest)) if ch == "(" -> #(LParen(index), rest, index + 1)
-    Ok(#(ch, rest)) if ch == ")" -> #(RParen(index), rest, index + 1)
+    "_" <> rest -> #(Underscore(index), rest, index + 1)
+    "(" <> rest -> #(LParen(index), rest, index + 1)
+    ")" <> rest -> #(RParen(index), rest, index + 1)
 
-    Ok(#(ch, _)) if ch == "0"
-      || ch == "1"
-      || ch == "2"
-      || ch == "3"
-      || ch == "4"
-      || ch == "5"
-      || ch == "6"
-      || ch == "7"
-      || ch == "8"
-      || ch == "9" -> {
+    "0" <> _
+    | "1" <> _
+    | "2" <> _
+    | "3" <> _
+    | "4" <> _
+    | "5" <> _
+    | "6" <> _
+    | "7" <> _
+    | "8" <> _
+    | "9" <> _ -> {
       let assert Ok(re) = regex.from_string("^\\d+(\\.\\d+)?")
       let assert [match, ..] = regex.scan(re, buffer)
 
@@ -61,19 +61,13 @@ fn get_token(old_buffer: String, index: Int) -> #(Token, String, Int) {
       let rest = string.drop_left(buffer, length)
 
       case match.submatches {
-        [] -> {
-          let assert Ok(int) = int.parse(content)
-          #(Integer(int, index), rest, index + length)
-        }
-        _ -> {
-          let assert Ok(float) = float.parse(content)
-          #(Float(float, index), rest, index + length)
-        }
+        [] -> #(Integer(content, index), rest, index + length)
+        _ -> #(Float(content, index), rest, index + length)
       }
     }
 
-    Ok(#(_, rest)) -> #(Invalid(index), rest, index + 1)
-    Error(_) -> #(EOE, "", index + 1)
+    "" -> #(EOE, "", index + 1)
+    _ -> #(Invalid(index), "", index + 1)
   }
 }
 
@@ -88,6 +82,7 @@ pub fn token_index(token: Token) {
     Slash(index) -> index
     Caret(index) -> index
 
+    Underscore(index) -> index
     LParen(index) -> index
     RParen(index) -> index
 
