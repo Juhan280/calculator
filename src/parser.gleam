@@ -1,5 +1,3 @@
-import gleam/float
-import gleam/int
 import gleam/iterator.{type Iterator, Done, Next}
 import gleam/list
 import gleam/result
@@ -18,7 +16,8 @@ pub type Operand {
 
 pub type Tree {
   Operation(operand: Operand, left: Tree, right: Tree)
-  Number(Float)
+  Integer(String)
+  Float(String)
   LastResult
 }
 
@@ -77,7 +76,7 @@ fn unary(tokens: Iterator(Token)) {
     Next(Minus(_), tokens) -> {
       use #(tree, tokens) <- result.try(number(tokens))
 
-      Ok(#(Operation(Sub, Number(0.0), tree), tokens))
+      Ok(#(Operation(Sub, Float("0.0"), tree), tokens))
     }
     Next(token, _) -> Error(token)
     Done -> Error(EOE)
@@ -87,15 +86,8 @@ fn unary(tokens: Iterator(Token)) {
 /// number ::= int | float | last_result | "(" expression ")"
 fn number(tokens: Iterator(Token)) {
   case iterator.step(tokens) {
-    Next(TInteger(int, _), tokens) -> {
-      let assert Ok(int) = int.parse(int)
-      let float = int.to_float(int)
-      Ok(#(Number(float), tokens))
-    }
-    Next(TFloat(float, _), tokens) -> {
-      let assert Ok(float) = float.parse(float)
-      Ok(#(Number(float), tokens))
-    }
+    Next(TInteger(int, _), tokens) -> Ok(#(Integer(int), tokens))
+    Next(TFloat(float, _), tokens) -> Ok(#(Float(float), tokens))
     Next(Underscore(_), tokens) -> Ok(#(LastResult, tokens))
     Next(LParen(_), tokens) -> {
       use #(tree, tokens) <- result.try(expression(tokens))

@@ -1,15 +1,20 @@
+import exception
 import gleam/bool.{guard}
 import gleam/erlang
 import gleam/float
+import gleam/int
 import gleam/io
 import gleam/result
 import gleam/string
 import lexer
-import parser.{type Tree, Add, Div, LastResult, Mul, Number, Operation, Pow, Sub}
+import parser.{
+  type Tree, Add, Div, Float, Integer, LastResult, Mul, Operation, Pow, Sub,
+}
 
 type CalculationError {
   DivisionByZero
   ComplexNumber
+  NumberTooLarge
 }
 
 pub fn main() {
@@ -17,7 +22,10 @@ pub fn main() {
 }
 
 fn loop(last_result: Float) {
-  use source <- result.then(erlang.get_line("> "))
+  use source <- result.then(
+    erlang.get_line("> ")
+    |> result.map_error(fn(_) { io.print("\r") }),
+  )
 
   let last_result = {
     use <- guard(source == "\n", last_result)
@@ -53,7 +61,16 @@ fn loop(last_result: Float) {
 
 fn evaluate(tree: Tree, last_result: Float) {
   case tree {
-    Number(n) -> Ok(n)
+    Integer(int) -> {
+      let assert Ok(int) = int.parse(int)
+      // int.to_float fails if the int is too large to fit in a float
+      exception.rescue(fn() { Ok(int.to_float(int)) })
+      |> result.unwrap(Error(NumberTooLarge))
+    }
+    Float(float) ->
+      float.parse(float)
+      |> result.replace_error(NumberTooLarge)
+
     LastResult -> Ok(last_result)
     Operation(op, left, right) -> {
       use left <- result.try(evaluate(left, last_result))
@@ -67,13 +84,16 @@ fn evaluate(tree: Tree, last_result: Float) {
           float.divide(left, right)
           |> result.replace_error(DivisionByZero)
         Pow ->
-          float.power(left, right)
-          |> result.map_error(fn(_) {
-            case left == 0.0 && right <. 0.0 {
-              True -> DivisionByZero
-              False -> ComplexNumber
-            }
+          exception.rescue(fn() {
+            float.power(left, right)
+            |> result.map_error(fn(_) {
+              case left == 0.0 && right <. 0.0 {
+                True -> DivisionByZero
+                False -> ComplexNumber
+              }
+            })
           })
+          |> result.unwrap(Error(NumberTooLarge))
       }
     }
   }
