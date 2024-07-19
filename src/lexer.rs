@@ -52,7 +52,7 @@ pub fn lex(source: &str) -> impl Iterator<Item = Token> {
 
 			'+' => tokens.push(Token::Plus(inc(&mut i))),
 			'-' => tokens.push(Token::Minus(inc(&mut i))),
-			'*' => tokens.push(Token::Asterisk(inc(&mut i))),
+			'*' | '×' => tokens.push(Token::Asterisk(inc(&mut i))),
 			'/' => tokens.push(Token::Slash(inc(&mut i))),
 			'^' => tokens.push(Token::Caret(inc(&mut i))),
 
