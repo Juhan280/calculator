@@ -84,6 +84,22 @@ pub fn lex(source: &str) -> impl Iterator<Item = Token> {
 				}
 				tokens.push(Token::Float(str, j));
 			}
+			'.' => {
+				let j = i;
+				let mut str = char.to_string();
+				i += 1;
+				
+        if !matches!(chars.peek(), Some('0'..='9')) {
+            tokens.push(Token::Invalid(j));
+            break;
+        }
+
+				while let Some('0'..='9') = chars.peek() {
+					str.push(chars.next().unwrap());
+					i += 1;
+				}
+				tokens.push(Token::Float(str, j));
+			}
 
 			_ => {
 				tokens.push(Token::Invalid(inc(&mut i)));
