@@ -2,25 +2,25 @@ use std::iter::Iterator;
 
 #[derive(Debug)]
 pub enum Token {
-	Integer(String, i32),
-	Float(String, i32),
+	Integer(String, usize),
+	Float(String, usize),
 
-	Plus(i32),
-	Minus(i32),
-	Asterisk(i32),
-	Slash(i32),
-	Caret(i32),
+	Plus(usize),
+	Minus(usize),
+	Asterisk(usize),
+	Slash(usize),
+	Caret(usize),
 
-	Underscore(i32),
-	LParen(i32),
-	RParen(i32),
+	Underscore(usize),
+	LParen(usize),
+	RParen(usize),
 
-	EOE,
-	Invalid(i32),
+	EOE(Option<usize>),
+	Invalid(usize),
 }
 
 impl Token {
-	pub const fn index(&self) -> i32 {
+	pub const fn index(&self, length: usize) -> usize {
 		match self {
 			Token::Integer(_, i) => *i,
 			Token::Float(_, i) => *i,
@@ -35,7 +35,8 @@ impl Token {
 			Token::LParen(i) => *i,
 			Token::RParen(i) => *i,
 
-			Token::EOE => -1,
+			Token::EOE(Some(i)) => *i,
+			Token::EOE(None) => length - 1,
 			Token::Invalid(i) => *i,
 		}
 	}
@@ -88,11 +89,11 @@ pub fn lex(source: &str) -> impl Iterator<Item = Token> {
 				let j = i;
 				let mut str = char.to_string();
 				i += 1;
-				
-        if !matches!(chars.peek(), Some('0'..='9')) {
-            tokens.push(Token::Invalid(j));
-            break;
-        }
+
+				if !matches!(chars.peek(), Some('0'..='9')) {
+					tokens.push(Token::Invalid(j));
+					break;
+				}
 
 				while let Some('0'..='9') = chars.peek() {
 					str.push(chars.next().unwrap());
@@ -111,7 +112,7 @@ pub fn lex(source: &str) -> impl Iterator<Item = Token> {
 	tokens.into_iter()
 }
 
-fn inc(i: &mut i32) -> i32 {
+fn inc(i: &mut usize) -> usize {
 	let j = i.to_owned();
 	*i += 1;
 	j

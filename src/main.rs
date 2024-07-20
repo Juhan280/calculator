@@ -21,7 +21,7 @@ fn main() {
 		let parsed = parser::parse(&mut lexed);
 		match parsed {
 			Err(token) => {
-				print_error(token);
+				print_error(token, source.len());
 			}
 			Ok(parsed) => {
 				last_result = evaluate(parsed, last_result);
@@ -30,6 +30,7 @@ fn main() {
 		};
 		eprint!("> ");
 	}
+	print!("\r");
 }
 
 fn evaluate(tree: Tree, last_result: f64) -> f64 {
@@ -60,7 +61,10 @@ fn print_ans(num: f64) {
 	println!("\x1b[38;5;138m{}\x1b[0m", num.to_string())
 }
 
-fn print_error(token: Token) {
-	let padding = " ".repeat(token.index() as usize + 2);
-	eprintln!("{}^\n{}Invalid Token: {:?}", padding, padding, token)
+fn print_error(token: Token, len: usize) {
+	let padding = " ".repeat(token.index(len) + 2);
+	match token {
+		Token::EOE(_) => eprintln!("{padding}^\n  Unexpected end of input: Expexted closing RParen"),
+		_ => eprintln!("{padding}^\n{padding}Invalid Token: {:?}", token),
+	}
 }

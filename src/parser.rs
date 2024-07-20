@@ -108,15 +108,15 @@ fn number(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Tree, To
 		Some(Token::Underscore(_)) => Ok(Tree::LastResult),
 		Some(Token::Integer(int, _)) => Ok(Tree::Integer(int)),
 		Some(Token::Float(int, _)) => Ok(Tree::Float(int)),
-		Some(Token::LParen(_)) => {
+		Some(Token::LParen(i)) => {
 			let tree = expression(tokens)?;
 			match tokens.next() {
 				Some(Token::RParen(_)) => Ok(tree),
 				Some(token) => Err(token),
-				None => Err(Token::EOE),
+				None => Err(Token::EOE(Some(i))),
 			}
 		}
 		Some(token) => Err(token),
-		None => Err(Token::EOE),
+		None => Err(Token::EOE(None)),
 	}
 }
