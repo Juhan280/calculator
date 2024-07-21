@@ -93,25 +93,23 @@ fn powered(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Tree, T
 
 /// juxtaposed ::= unary [ "(" expression ")" ]
 fn juxtaposed(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Tree, Token> {
-	let tree = unary(tokens)?;
+	let mut tree = unary(tokens)?;
 
-	match tokens.peek() {
-		Some(Token::LParen(i)) => {
-			let i = *i;
-			tokens.next();
-			let new_tree = expression(tokens)?;
-			match tokens.next() {
-				Some(Token::RParen(_)) => Ok(Tree::Operation(
-					Oparand::Mul,
-					Box::new(tree),
-					Box::new(new_tree),
-				)),
-				Some(token) => Err(token),
-				None => Err(Token::EOE(Some(i))),
-			}
-		}
-		_ => Ok(tree),
+	while let Some(Token::LParen(i)) = tokens.peek() {
+		let i = *i;
+		tokens.next();
+		let new_tree = expression(tokens)?;
+		tree = match tokens.next() {
+			Some(Token::RParen(_)) => Ok(Tree::Operation(
+				Oparand::Mul,
+				Box::new(tree),
+				Box::new(new_tree),
+			)),
+			Some(token) => Err(token),
+			None => Err(Token::EOE(Some(i))),
+		}?;
 	}
+	Ok(tree)
 }
 
 /// unary ::= ["+" | "-"] number

@@ -17,7 +17,7 @@ pub enum Token {
 
 	// TODO: visit https://rust-lang.github.io/rust-clippy/master/index.html#upper_case_acronyms
 	EOE(Option<usize>),
-	Invalid(usize),
+	Unknown(usize),
 }
 
 impl Token {
@@ -33,7 +33,7 @@ impl Token {
 			| Token::Underscore(i)
 			| Token::LParen(i)
 			| Token::RParen(i)
-			| Token::Invalid(i)
+			| Token::Unknown(i)
 			| Token::EOE(Some(i)) => *i,
 			Token::EOE(None) => length - 1,
 		}
@@ -88,7 +88,7 @@ pub fn lex(source: &str) -> impl Iterator<Item = Token> + Clone + '_ {
         // If the next char is not a digit, then return Invalid
 				match chars.peek() {
 					Some((_, '0'..='9')) => (),
-					_ => return Some(Token::Invalid(i)),
+					_ => return Some(Token::Unknown(i)),
 				}
 
         // Accumulate all the trailing digits in `str`
@@ -98,7 +98,7 @@ pub fn lex(source: &str) -> impl Iterator<Item = Token> + Clone + '_ {
 				Some(Token::Float(str, i))
 			}
 
-			_ => Some(Token::Invalid(i)),
+			_ => Some(Token::Unknown(i)),
 		}
 	})
 }

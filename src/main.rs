@@ -82,10 +82,16 @@ fn print_error(is_tty: bool, token: Token, len: usize) {
 
 	let padding = " ".repeat(token.index(len) + 2);
 	match token {
-		Token::EOE(Some(i)) if i != len => {
-			eprintln!("\x1b[31m{padding}^\n  Unexpected end of input: Expexted closing RParen\x1b[0m")
+		Token::EOE(o) => {
+			let default = format!("\x1b[31m{padding}^\n  Unexpected end of input");
+			match o {
+				Some(i) if i != len => eprintln!("{default}: Expexted closing RParen\x1b[0m"),
+				_ => eprintln!("{default}\x1b[0m"),
+			}
 		}
-		Token::EOE(_) => eprintln!("\x1b[31m{padding}^\n  Unexpected end of input\x1b[0m"),
-		_ => eprintln!("\x1b[31m{padding}^\n{padding}Invalid Token: {:?}\x1b[0m", token),
+		_ => eprintln!(
+			"\x1b[31m{padding}^\n{padding}Invalid Token: {:?}\x1b[0m",
+			token
+		),
 	}
 }
