@@ -1,4 +1,4 @@
-use std::iter::Iterator;
+use std::iter::{self, Iterator};
 
 #[derive(Debug)]
 pub enum Token {
@@ -15,6 +15,7 @@ pub enum Token {
 	LParen(usize),
 	RParen(usize),
 
+	// TODO: visit https://rust-lang.github.io/rust-clippy/master/index.html#upper_case_acronyms
 	EOE(Option<usize>),
 	Invalid(usize),
 }
@@ -22,98 +23,82 @@ pub enum Token {
 impl Token {
 	pub const fn index(&self, length: usize) -> usize {
 		match self {
-			Token::Integer(_, i) => *i,
-			Token::Float(_, i) => *i,
-
-			Token::Plus(i) => *i,
-			Token::Minus(i) => *i,
-			Token::Asterisk(i) => *i,
-			Token::Slash(i) => *i,
-			Token::Caret(i) => *i,
-
-			Token::Underscore(i) => *i,
-			Token::LParen(i) => *i,
-			Token::RParen(i) => *i,
-
-			Token::EOE(Some(i)) => *i,
+			Token::Integer(_, i)
+			| Token::Float(_, i)
+			| Token::Plus(i)
+			| Token::Minus(i)
+			| Token::Asterisk(i)
+			| Token::Slash(i)
+			| Token::Caret(i)
+			| Token::Underscore(i)
+			| Token::LParen(i)
+			| Token::RParen(i)
+			| Token::Invalid(i)
+			| Token::EOE(Some(i)) => *i,
 			Token::EOE(None) => length - 1,
-			Token::Invalid(i) => *i,
 		}
 	}
 }
 
-pub fn lex(source: &str) -> impl Iterator<Item = Token> {
-	let mut tokens = vec![];
-	let mut i = 0;
-	let mut chars = source.chars().peekable();
+pub fn lex(source: &str) -> impl Iterator<Item = Token> + Clone + '_ {
+	let mut chars = source.chars().enumerate().peekable();
 
-	while let Some(char) = chars.next() {
+	iter::from_fn(move || {
+		while let Some(&(_, ' ' | '\t')) = chars.peek() {
+			chars.next();
+		}
+
+		let (i, char) = chars.next()?;
 		match char {
-			' ' | '\t' => i += 1,
+			'+' => Some(Token::Plus(i)),
+			'-' => Some(Token::Minus(i)),
+			'*' | '×' => Some(Token::Asterisk(i)),
+			'/' => Some(Token::Slash(i)),
+			'^' => Some(Token::Caret(i)),
 
-			'+' => tokens.push(Token::Plus(inc(&mut i))),
-			'-' => tokens.push(Token::Minus(inc(&mut i))),
-			'*' | '×' => tokens.push(Token::Asterisk(inc(&mut i))),
-			'/' => tokens.push(Token::Slash(inc(&mut i))),
-			'^' => tokens.push(Token::Caret(inc(&mut i))),
-
-			'_' => tokens.push(Token::Underscore(inc(&mut i))),
-			'(' => tokens.push(Token::LParen(inc(&mut i))),
-			')' => tokens.push(Token::RParen(inc(&mut i))),
+			'_' => Some(Token::Underscore(i)),
+			'(' => Some(Token::LParen(i)),
+			')' => Some(Token::RParen(i)),
 
 			'0'..='9' => {
-				let j = i;
 				let mut str = char.to_string();
 
-				i += 1;
-				while let Some('0'..='9') = chars.peek() {
-					str.push(chars.next().unwrap());
-					i += 1;
+        // Accumulate all the trailing digits in `str`
+				while let Some(&(_, '0'..='9')) = chars.peek() {
+					str.push(chars.next().unwrap().1);
 				}
 
-				let peek = chars.peek();
-				if peek != Some(&'.') || peek == None {
-					tokens.push(Token::Integer(str, j));
-					continue;
+        // If the next char is not '.', then return Integer
+				match chars.peek() {
+					Some((_, '.')) => (),
+					_ => return Some(Token::Integer(str, i)),
 				}
-				str.push(chars.next().unwrap());
 
-				i += 1;
-				while let Some('0'..='9') = chars.peek() {
-					str.push(chars.next().unwrap());
-					i += 1;
+				str.push(chars.next().expect("this should be a '.'").1);
+
+        // Accumulate all the trailing digits in `str`
+				while let Some(&(_, '0'..='9')) = chars.peek() {
+					str.push(chars.next().unwrap().1);
 				}
-				tokens.push(Token::Float(str, j));
+				Some(Token::Float(str, i))
 			}
 			'.' => {
-				let j = i;
 				let mut str = char.to_string();
-				i += 1;
 
-				if !matches!(chars.peek(), Some('0'..='9')) {
-					tokens.push(Token::Invalid(j));
-					break;
+        // If the next char is not a digit, then return Invalid
+				match chars.peek() {
+					Some((_, '0'..='9')) => (),
+					_ => return Some(Token::Invalid(i)),
 				}
 
-				while let Some('0'..='9') = chars.peek() {
-					str.push(chars.next().unwrap());
-					i += 1;
+        // Accumulate all the trailing digits in `str`
+				while let Some(&(_, '0'..='9')) = chars.peek() {
+					str.push(chars.next().unwrap().1);
 				}
-				tokens.push(Token::Float(str, j));
+				Some(Token::Float(str, i))
 			}
 
-			_ => {
-				tokens.push(Token::Invalid(inc(&mut i)));
-				break;
-			}
+			_ => Some(Token::Invalid(i)),
 		}
-	}
-
-	tokens.into_iter()
-}
-
-fn inc(i: &mut usize) -> usize {
-	let j = i.to_owned();
-	*i += 1;
-	j
+	})
 }
