@@ -1,3 +1,4 @@
+use std::env;
 use std::io::{self, IsTerminal};
 
 use lexer::Token;
@@ -6,7 +7,19 @@ use parser::{Oparand, Tree};
 mod lexer;
 mod parser;
 
+const NAME: &str = env!("CARGO_PKG_NAME");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn main() {
+	let mut args = env::args();
+	args.next(); // bin path
+
+	if let Some(arg) = args.next() {
+		if matches!(arg.as_str(), "-V" | "--version") {
+			return println!("{NAME} {VERSION}");
+		}
+	}
+
 	let mut last_result = 0.0;
 	let is_tty_in = io::stdin().is_terminal();
 	let is_tty_out = io::stdout().is_terminal();
