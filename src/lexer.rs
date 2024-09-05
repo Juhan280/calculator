@@ -12,6 +12,7 @@ pub enum Token {
 	Caret(usize),
 
 	Underscore(usize),
+	E(usize),
 	LParen(usize),
 	RParen(usize),
 
@@ -31,6 +32,7 @@ impl Token {
 			| Token::Slash(i)
 			| Token::Caret(i)
 			| Token::Underscore(i)
+			| Token::E(i)
 			| Token::LParen(i)
 			| Token::RParen(i)
 			| Token::Unknown(i)
@@ -57,18 +59,19 @@ pub fn lex(source: &str) -> impl Iterator<Item = Token> + Clone + '_ {
 			'^' => Some(Token::Caret(i)),
 
 			'_' => Some(Token::Underscore(i)),
+			'e' | 'E' => Some(Token::E(i)),
 			'(' => Some(Token::LParen(i)),
 			')' => Some(Token::RParen(i)),
 
 			'0'..='9' => {
 				let mut str = char.to_string();
 
-        // Accumulate all the trailing digits in `str`
+				// Accumulate all the trailing digits in `str`
 				while let Some(&(_, '0'..='9')) = chars.peek() {
 					str.push(chars.next().unwrap().1);
 				}
 
-        // If the next char is not '.', then return Integer
+				// If the next char is not '.', then return Integer
 				match chars.peek() {
 					Some((_, '.')) => (),
 					_ => return Some(Token::Integer(str, i)),
@@ -76,7 +79,7 @@ pub fn lex(source: &str) -> impl Iterator<Item = Token> + Clone + '_ {
 
 				str.push(chars.next().expect("this should be a '.'").1);
 
-        // Accumulate all the trailing digits in `str`
+				// Accumulate all the trailing digits in `str`
 				while let Some(&(_, '0'..='9')) = chars.peek() {
 					str.push(chars.next().unwrap().1);
 				}
@@ -85,13 +88,13 @@ pub fn lex(source: &str) -> impl Iterator<Item = Token> + Clone + '_ {
 			'.' => {
 				let mut str = char.to_string();
 
-        // If the next char is not a digit, then return Invalid
+				// If the next char is not a digit, then return Invalid
 				match chars.peek() {
 					Some((_, '0'..='9')) => (),
 					_ => return Some(Token::Unknown(i)),
 				}
 
-        // Accumulate all the trailing digits in `str`
+				// Accumulate all the trailing digits in `str`
 				while let Some(&(_, '0'..='9')) = chars.peek() {
 					str.push(chars.next().unwrap().1);
 				}

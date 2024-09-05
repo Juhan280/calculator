@@ -52,7 +52,8 @@ fn main() {
 
 fn evaluate(tree: Tree, last_result: f64) -> f64 {
 	match tree {
-		Tree::Integer(str) | Tree::Float(str) => parse(&str),
+		Tree::Integer(int) => int.into(),
+    Tree::Float(float) => float,
 		Tree::LastResult => last_result,
 		Tree::Operation(op, left, right) => {
 			let left = evaluate(*left, last_result);
@@ -67,11 +68,6 @@ fn evaluate(tree: Tree, last_result: f64) -> f64 {
 			}
 		}
 	}
-}
-
-fn parse(str: &str) -> f64 {
-	str.parse::<f64>()
-		.expect("this should already be validated by the lexer")
 }
 
 fn prompt(is_tty: bool) {

@@ -1,4 +1,4 @@
-use std::iter::Peekable;
+use std::{error::Error, iter::Peekable, str::FromStr};
 
 use crate::lexer::Token;
 
@@ -14,8 +14,8 @@ pub enum Oparand {
 #[derive(Debug)]
 pub enum Tree {
 	Operation(Oparand, Box<Tree>, Box<Tree>),
-	Integer(String),
-	Float(String),
+	Integer(i32),
+	Float(f64),
 	LastResult,
 }
 
@@ -120,7 +120,7 @@ fn unary(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Tree, Tok
 			let token = number(tokens)?;
 			Ok(Tree::Operation(
 				Oparand::Sub,
-				Box::new(Tree::Float("0.0".into())),
+				Box::new(Tree::Float(0.0)),
 				Box::new(token),
 			))
 		}
@@ -132,8 +132,38 @@ fn unary(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Tree, Tok
 fn number(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Tree, Token> {
 	match tokens.next() {
 		Some(Token::Underscore(_)) => Ok(Tree::LastResult),
-		Some(Token::Integer(int, _)) => Ok(Tree::Integer(int)),
-		Some(Token::Float(int, _)) => Ok(Tree::Float(int)),
+		Some(Token::Integer(int, _)) => match tokens.peek() {
+			Some(Token::E(_)) => {
+				tokens.next();
+				let tree = powered(tokens)?;
+				Ok(Tree::Operation(
+					Oparand::Mul,
+					Box::new(Tree::Integer(parse_num(&int))),
+					Box::new(Tree::Operation(
+						Oparand::Pow,
+						Box::new(Tree::Integer(10)),
+						Box::new(tree),
+					)),
+				))
+			}
+			_ => Ok(Tree::Integer(parse_num(&int))),
+		},
+		Some(Token::Float(float, _)) => match tokens.peek() {
+			Some(Token::E(_)) => {
+				tokens.next();
+				let tree = powered(tokens)?;
+				Ok(Tree::Operation(
+					Oparand::Mul,
+					Box::new(Tree::Float(parse_num(&float))),
+					Box::new(Tree::Operation(
+						Oparand::Pow,
+						Box::new(Tree::Integer(10)),
+						Box::new(tree),
+					)),
+				))
+			}
+			_ => Ok(Tree::Integer(parse_num(&float))),
+		},
 		Some(Token::LParen(i)) => {
 			let tree = expression(tokens)?;
 			match tokens.next() {
@@ -145,4 +175,9 @@ fn number(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Tree, To
 		Some(token) => Err(token),
 		None => Err(Token::EOE(None)),
 	}
+}
+
+fn parse_num<T: FromStr<Err = U>, U: Error>(str: &str) -> T {
+	str.parse::<T>()
+		.expect("this should already be validated by the lexer")
 }
